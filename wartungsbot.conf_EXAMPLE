@@ -1,0 +1,17 @@
+[TECH]
+# Auf true setzen, falls der Bot auf dem gleichen Server läuft, wie das Wiki
+localhost = false
+log = logging.INFO
+
+[ZUGANGSDATEN]
+benutzer =
+passwort =
+
+[PROTOKOLL]
+dateiname = terminprotokoll.txt
+
+[PARAMETER]
+seite = Benutzer:Wartungsbot
+start = ===Beginn Konfiguration===
+ende = ===Ende Konfiguration===
+
