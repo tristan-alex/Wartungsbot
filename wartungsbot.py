@@ -4,6 +4,7 @@ import datetime
 import logging
 import os
 import re
+import sys
 
 import yaml
 import configparser
@@ -236,6 +237,15 @@ Dein Wartungsbot
 
 def main():
     wb = Wartungsbot('wartungsbot.conf')
+    if len(sys.argv) > 1:
+        argument = sys.argv[1]
+        erlaubte_argumente = ['terminplan']
+        if argument not in erlaubte_argumente:
+            logging.error(f'Argument nicht erkannt: {argument}')
+            print(f'Argument unbekannt: {argument}. Erlaubt sind: {erlaubte_argumente}')
+            return
+    else:
+        argument = None
 
     if not wb.param['Aktiv']:
         logging.info('Bot nicht aktiv.')
@@ -246,7 +256,7 @@ def main():
     else:
         logging.info('Terminbereinigung nicht aktiviert.')
 
-    if wb.param['TerminplanVersenden']:
+    if wb.param['TerminplanVersenden'] and argument == 'terminplan':
         wb.terminplan_mailen()
     else:
         logging.info('Versand Terminplan nicht aktiviert.')
