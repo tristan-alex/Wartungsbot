@@ -9,6 +9,7 @@ import yaml
 import configparser
 
 from mwclient import Site
+from tabulate import tabulate
 
 
 @dataclasses.dataclass
@@ -28,9 +29,31 @@ class Termin:
     kommentare: str = ''
 
 
+def namen_auslesen(text: str, spieler: bool = True) -> [str]:
+    """
+    Liest aus der Wiki-Seite eines Termins die Liste der Spieler oder die Liste der Zusagen aus.
+    :param text: string-Darstellung der Wiki-Seite
+    :param spieler: Wenn True, dann wird Liste der Spieler ausgelesen; wenn False, dann Liste der Zusagen
+    :return: Liste von strings, welche die Namen der Spieler oder der Zusagen enthält
+    """
+    ergebnis = []
+    if spieler:
+        start, ende = '|Spieler=', '|EMailVerteiler='
+    else:
+        start, ende = '|Zusagen=', '|Status='
+    for zeile in text[text.find(start) + len(start):text.rfind(ende)].splitlines():
+        if ':' in zeile:
+            ergebnis.append((zeile[zeile.find(':') + 1:zeile.rfind('|')]))
+        else:
+            ergebnis.append(zeile.replace('*', '').replace(' ', ''))
+    return sorted([s for s in ergebnis if s])
+
+
 class Wartungsbot:
     def __init__(self, config: str):
         # Verzeichnis wechseln wegen lokaler Pfade
+        self.termine_geladen = False
+        self.termine = None
         self.param = None
         self.rpg_wiki = None
         self.protokoll = None
@@ -88,6 +111,7 @@ class Wartungsbot:
         pattern = r'(' + self.param_start + ')(.*?)(' + self.param_ende + ')'
         try:
             self.param = yaml.load(re.search(pattern, self.param, flags=re.S).group(2), Loader=yaml.SafeLoader)
+            self.param['Abonnenten'] = self.param['Abonnenten'].replace(' ', '').split(',')
         except yaml.YAMLError as e:
             logging.exception(e)
         logging.debug(f"Konfiguration gelesen:\n{self.param}")
@@ -97,11 +121,11 @@ class Wartungsbot:
         Führt alle Aufgaben der Wartungsbot-Routine durch. Aktuell: Bereinigen abgelaufener Termine
         :return:
         """
-        termine = self.termine_abfragen()
+        self.termine_abfragen()
 
         # Liste der abgelaufenen Termine ermitteln
         heute = datetime.datetime.today().date()
-        termine = [termin for termin in termine if (heute - termin.datum).days >= self.param['TageVergangen']]
+        termine = [termin for termin in self.termine if (heute - termin.datum).days >= self.param['TageVergangen']]
 
         if not termine:
             logging.info('Keine Termine gefunden, die älter als ' + str(self.param['TageVergangen']) + ' Tage sind.')
@@ -144,9 +168,13 @@ class Wartungsbot:
                 termin.tag = data['TerminTag'][0] if data['TerminTag'] else ''
                 if data['TerminLink']:
                     termin.link = data['TerminLink'][0]
+                    termin_seite = self.rpg_wiki.pages[termin.link].text()
+                    termin.spieler = namen_auslesen(termin_seite)
+                    termin.zusagen = namen_auslesen(termin_seite, spieler=False)
                 if termin:
                     termine.append(dataclasses.replace(termin))
-        return termine
+        self.termine = termine
+        self.termine_geladen = True
 
     def termin_bereinigen(self, termin: Termin):
         """
@@ -169,6 +197,42 @@ class Wartungsbot:
             f"Wartungsbot: Vergangenen Termin vom {termin.datum.strftime('%d.%m.%y')} entfernt.",
             minor=False, bot=True)
 
+    def terminplan_mailen(self):
+        if not self.termine_geladen:
+            self.termine_abfragen()
+
+        heute = datetime.datetime.today().date()
+        montag = heute + datetime.timedelta(days=(-heute.weekday() % 7))
+        sonntag = montag + datetime.timedelta(days=6)
+
+        abonnenten = self.param['Abonnenten']
+
+        for abonnent in abonnenten:
+            termine = [termin for termin in self.termine
+                       if termin.datum <= sonntag and abonnent in termin.spieler]
+
+            if not self.termine:
+                msg = f"""Lieber {abonnent},\n\nin der nächsten Woche habe ich keine Rollenspiel-Termine gefunden,
+                bei denen du mitspielen würdest.\n\nViele Grüße\nDein Wartungsbot"""
+            else:
+                termine = sorted(termine, key=lambda x: str(x.datum))
+                tabelle = [[termin.tag, termin.datum, termin.kampagne, termin.status,
+                            f"zugesagt" if abonnent in termin.zusagen else f"nicht zugesagt"] for termin in termine]
+                msg = f"""
+Lieber {abonnent},\n\n
+hier eine Übersicht der angesetzten Rollenspiel-Termine der nächsten Woche:
+
+{tabulate(tabelle, headers=["Wochentag", "Datum", "Kampagne", "Status", "Eigene Aussage"], tablefmt="grid")}
+
+Viele Grüße,
+Dein Wartungsbot
+        """
+            try:
+                self.rpg_wiki.email(abonnent, msg, 'Wöchentliche Rollenspiel-Terminübersicht', cc=False)
+                logging.info(f"Terminplan an {abonnent} verschickt.")
+            except Exception as e:
+                logging.error(f"Versand an {abonnent} fehlgeschlagen: {e}")
+
 
 def main():
     wb = Wartungsbot('wartungsbot.conf')
@@ -181,6 +245,11 @@ def main():
         wb.termine_bereinigen()
     else:
         logging.info('Terminbereinigung nicht aktiviert.')
+
+    if wb.param['TerminplanVersenden']:
+        wb.terminplan_mailen()
+    else:
+        logging.info('Versand Terminplan nicht aktiviert.')
 
 
 if __name__ == '__main__':
