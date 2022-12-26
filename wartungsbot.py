@@ -236,7 +236,6 @@ Dein Wartungsbot
 
 
 def main():
-    wb = Wartungsbot('wartungsbot.conf')
     if len(sys.argv) > 1:
         argument = sys.argv[1]
         erlaubte_argumente = ['terminplan']
@@ -246,6 +245,8 @@ def main():
             return
     else:
         argument = None
+
+    wb = Wartungsbot('wartungsbot.conf')
 
     if not wb.param['Aktiv']:
         logging.info('Bot nicht aktiv.')
