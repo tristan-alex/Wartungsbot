@@ -252,7 +252,7 @@ def main():
         logging.info('Bot nicht aktiv.')
         return
 
-    if wb.param['VergangeneTermineBereinigen']:
+    if wb.param['VergangeneTermineBereinigen'] and not argument:
         wb.termine_bereinigen()
     else:
         logging.info('Terminbereinigung nicht aktiviert.')
