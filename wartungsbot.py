@@ -78,6 +78,11 @@ class Wartungsbot:
         self.parametrisierung_laden()
 
     def konfig_laden(self, config: str):
+        """
+        Lädt die Konfiguration des Wartungsbots aus einer lokalen Konfigurationsdatei.
+        :param config: Dateiname der Konfigurationsdatei
+        :return:
+        """
         # Konfigurationsdatei einlesen
         self.static_config = configparser.ConfigParser()
         self.static_config.read(config)
@@ -104,6 +109,10 @@ class Wartungsbot:
             f"{self.param_seite=},{self.param_start=},{self.param_ende=}")
 
     def wiki_login(self):
+        """
+        Führt ein Login im Wiki aus.
+        :return:
+        """
         # Falls Bot auf dem Pi läuft, Verbindung nach localhost und Verzicht auf SSL-Sicherung
         if self.localhost:
             self.rpg_wiki = Site('localhost', path='/mediawiki/', reqs={'verify': False})
@@ -112,6 +121,10 @@ class Wartungsbot:
         self.rpg_wiki.login(self.user, self.password)
 
     def parametrisierung_laden(self):
+        """
+        Lädt die Parametrisierung des Wartungsbots aus dem Wiki.
+        :return:
+        """
         # Parametrisierung aus Wiki-Seite auslesen
         self.param = self.rpg_wiki.pages[self.param_seite].text()
         pattern = r'(' + self.param_start + ')(.*?)(' + self.param_ende + ')'
@@ -144,7 +157,7 @@ class Wartungsbot:
     def termine_abfragen(self):
         """
         Führt eine Abfrage im SemanticMediaWiki durch, um eine Liste der angesetzten Termine zu ermitteln.
-        :return: Liste der Termine
+        :return:
         """
         query = r"""[[terminAnzeigen::wahr]]
                     |mainlabel=-
@@ -204,6 +217,11 @@ class Wartungsbot:
             minor=False, bot=True)
 
     def terminplan_mailen(self):
+        """
+        Schickt eine Mail an alle Abonnenten, in der die Rollenspieltermine enthalten sind, die bis einschließlich
+        folgendem Sonntag angesetzt sind.
+        :return:
+        """
         if not self.termine_geladen:
             self.termine_abfragen()
 
@@ -241,6 +259,10 @@ Dein Wartungsbot
 
 
 def main():
+    """
+    Einstiegspunkt des Skripts.
+    :return:
+    """
     if len(sys.argv) > 1:
         argument = sys.argv[1]
         erlaubte_argumente = ['terminplan']
