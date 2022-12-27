@@ -124,7 +124,7 @@ class Wartungsbot:
 
     def termine_bereinigen(self):
         """
-        Führt alle Aufgaben der Wartungsbot-Routine durch. Aktuell: Bereinigen abgelaufener Termine
+        Bereinigt abgelaufene Termine.
         :return:
         """
         self.termine_abfragen()
