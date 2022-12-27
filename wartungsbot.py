@@ -5,10 +5,8 @@ import logging
 import os
 import re
 import sys
-
 import yaml
 import configparser
-
 from mwclient import Site
 from tabulate import tabulate
 
@@ -51,7 +49,14 @@ def namen_auslesen(text: str, spieler: bool = True) -> [str]:
 
 
 class Wartungsbot:
+    """
+    Klasse für den Wartungsbot
+    """
     def __init__(self, config: str):
+        """
+        Initialisiert den Wartungsbot
+        :param config: Dateiname der Konfigurationsdatei
+        """
         # Verzeichnis wechseln wegen lokaler Pfade
         self.termine_geladen = False
         self.termine = None
@@ -72,7 +77,7 @@ class Wartungsbot:
         self.wiki_login()
         self.parametrisierung_laden()
 
-    def konfig_laden(self, config):
+    def konfig_laden(self, config: str):
         # Konfigurationsdatei einlesen
         self.static_config = configparser.ConfigParser()
         self.static_config.read(config)
@@ -136,7 +141,7 @@ class Wartungsbot:
             logging.info(f"Bereinige Termin vom {termin.datum.strftime('%d.%m.%Y')} für {termin.kampagne}.")
             self.termin_bereinigen(termin)
 
-    def termine_abfragen(self) -> [Termin]:
+    def termine_abfragen(self):
         """
         Führt eine Abfrage im SemanticMediaWiki durch, um eine Liste der angesetzten Termine zu ermitteln.
         :return: Liste der Termine
