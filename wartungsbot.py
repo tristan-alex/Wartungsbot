@@ -217,7 +217,7 @@ class Wartungsbot:
                 bei denen du mitspielen würdest.\n\nViele Grüße\nDein Wartungsbot"""
             else:
                 termine = sorted(termine, key=lambda x: str(x.datum))
-                tabelle = [[termin.tag, termin.datum, termin.kampagne, termin.status,
+                tabelle = [[termin.tag, termin.datum.strftime('%d.%m.%y'), termin.kampagne, termin.status,
                             f"zugesagt" if abonnent in termin.zusagen else f"nicht zugesagt"] for termin in termine]
                 msg = f"""
 Lieber {abonnent},\n\n
