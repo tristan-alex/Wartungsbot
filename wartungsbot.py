@@ -348,6 +348,7 @@ Dein Wartungsbot
         Postet Terminideen im Tabellenformat auf der Hauptseite.
         :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
         """
+        wochentage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
         ret = sorted(self.terminideen(delta), key=lambda x: x['Kampagne'])
         for kampagne in ret:
             if kampagne['Datum'] and not kampagne['Fehlen']:
@@ -357,14 +358,15 @@ Dein Wartungsbot
             else:
                 kampagne['Vorschlag'] = '<span style="color:#800000">kein Termin möglich.</span>'
         tabelle = [[kampagne['Kampagne'],
+                    wochentage[kampagne['Datum'].weekday()] if kampagne['Datum'] else '',
                     datetime.datetime.strftime(kampagne['Datum'], '%d.%m.%Y') if kampagne['Datum'] else 'Keinen Termin '
                                                                                                         'gefunden',
                     ', '.join(kampagne['Fehlen']), kampagne['Vorschlag'], ''] for kampagne in ret]
-        wiki_tabelle = tabulate(tabelle,
-                                headers=["Kampagne", "Datum", "Fehlende Zusagen", 'Terminvorschlag?', 'Kommentar'],
-                                tablefmt="mediawiki")
+        wiki = tabulate(tabelle, headers=["Kampagne", "Tag", "Datum",
+                                          "Fehlende Zusagen", 'Terminvorschlag?', 'Kommentar'],
+                        tablefmt="mediawiki")
         seite = self.rpg_wiki.pages['Hauptseite'].text()
-        ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki_tabelle, seite, flags=re.S)
+        ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki, seite, flags=re.S)
         self.rpg_wiki.pages['Hauptseite'].edit(
             ergebnis, f"Wartungsbot: Tabelle Terminvorschläge aktualisiert.", minor=False, bot=True)
         logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
