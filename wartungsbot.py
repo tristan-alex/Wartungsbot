@@ -271,11 +271,13 @@ Dein Wartungsbot
                 }
 
         if self.localhost:
-            url = 'localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            url = 'https://localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            verify = False
         else:
             url = 'https://www.rollenspiel-wiki.de/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            verify = True
         try:
-            ergebnisse = requests.post(url, data=data).json()['result']
+            ergebnisse = requests.post(url, data=data, verify=verify).json()['result']
         except Exception as e:
             logging.error(f"Fehler bei Abfrage des Zusagestatus: {e}")
             return {}
@@ -306,17 +308,18 @@ Dein Wartungsbot
         ret = []
 
         if self.localhost:
-            url = 'localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            url = 'https://localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            verify = False
         else:
             url = 'https://www.rollenspiel-wiki.de/mediawiki/extensions/terminplanung/terminplanungapi.php'
+            verify = True
+        kampagnen = requests.post(url, data={'functionname': 'getCampaigns'}, verify=verify).json()['result']
 
         if not self.termine_geladen:
             self.termine_abfragen()
             self.termine_geladen = True
-
         verboten = [termin.datum for termin in self.termine if termin.status in ['Angesetzt', 'Bestätigt']]
 
-        kampagnen = requests.post(url, data={'functionname': 'getCampaigns'}).json()['result']
         for kampagne in kampagnen:
             datum = heute
             spieldatum = None
