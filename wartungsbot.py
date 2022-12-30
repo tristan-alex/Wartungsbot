@@ -374,7 +374,7 @@ def main():
     """
     if len(sys.argv) > 1:
         argument = sys.argv[1]
-        erlaubte_argumente = ['terminplan']
+        erlaubte_argumente = ['terminplan', 'terminideen']
         if argument not in erlaubte_argumente:
             logging.error(f'Argument nicht erkannt: {argument}')
             print(f'Argument unbekannt: {argument}. Erlaubt sind: {erlaubte_argumente}')
