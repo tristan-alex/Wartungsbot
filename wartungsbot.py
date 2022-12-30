@@ -5,6 +5,8 @@ import logging
 import os
 import re
 import sys
+
+import requests
 import yaml
 import configparser
 from mwclient import Site
@@ -52,12 +54,14 @@ class Wartungsbot:
     """
     Klasse für den Wartungsbot
     """
+
     def __init__(self, config: str):
         """
         Initialisiert den Wartungsbot
         :param config: Dateiname der Konfigurationsdatei
         """
         # Verzeichnis wechseln wegen lokaler Pfade
+        os.chdir(os.path.dirname(os.path.abspath(__file__)))
         self.termine_geladen = False
         self.termine = None
         self.param = None
@@ -71,7 +75,6 @@ class Wartungsbot:
         self.log_level = None
         self.localhost = None
         self.static_config = None
-        os.chdir(os.path.dirname(os.path.abspath(__file__)))
 
         self.konfig_laden(config)
         self.wiki_login()
@@ -83,7 +86,6 @@ class Wartungsbot:
         :param config: Dateiname der Konfigurationsdatei
         :return:
         """
-        # Konfigurationsdatei einlesen
         self.static_config = configparser.ConfigParser()
         self.static_config.read(config)
 
@@ -113,7 +115,6 @@ class Wartungsbot:
         Führt ein Login im Wiki aus.
         :return:
         """
-        # Falls Bot auf dem Pi läuft, Verbindung nach localhost und Verzicht auf SSL-Sicherung
         if self.localhost:
             self.rpg_wiki = Site('localhost', path='/mediawiki/', reqs={'verify': False})
         else:
@@ -125,7 +126,6 @@ class Wartungsbot:
         Lädt die Parametrisierung des Wartungsbots aus dem Wiki.
         :return:
         """
-        # Parametrisierung aus Wiki-Seite auslesen
         self.param = self.rpg_wiki.pages[self.param_seite].text()
         pattern = r'(' + self.param_start + ')(.*?)(' + self.param_ende + ')'
         try:
@@ -142,7 +142,6 @@ class Wartungsbot:
         """
         self.termine_abfragen()
 
-        # Liste der abgelaufenen Termine ermitteln
         heute = datetime.datetime.today().date()
         termine = [termin for termin in self.termine if (heute - termin.datum).days >= self.param['TageVergangen']]
 
@@ -201,7 +200,6 @@ class Wartungsbot:
         :param termin: Termin, der bereinigt werden soll
         :return:
         """
-        # Bereinigte Termine in Terminprotokoll ablegen
         with open(self.protokoll, 'a+') as f:
             f.write(f"\n{termin.datum.strftime('%d.%m.%y')};{termin.kampagne};{termin.status}")
 
@@ -257,6 +255,117 @@ Dein Wartungsbot
             except Exception as e:
                 logging.error(f"Versand an {abonnent} fehlgeschlagen: {e}")
 
+    def zusagestatus(self, von: datetime.date, bis: datetime.date) -> dict:
+        """
+        Ermittelt für alle Daten zwischen von und bis den Zusagestatus aller Spieler auf Basis von
+        Jeanettes Terminplanungs-Skript.
+        :param von: Startdatum
+        :param bis: Enddatum
+        :return: Dictionary mit Zusagen, Absagen und 'unsicher'
+        """
+        von = '"from": {"dd": ' + str(von.day) + ', "mm": ' + str(von.month) + ', "yyyy": ' + str(von.year) + '}'
+        bis = '"to": {"dd": ' + str(bis.day) + ', "mm": ' + str(bis.month) + ', "yyyy": ' + str(bis.year) + '}'
+
+        data = {'functionname': 'getDateContentInRange',
+                'arguments': '{' + von + ', ' + bis + '}'
+                }
+
+        if self.localhost:
+            url = 'localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+        else:
+            url = 'https://www.rollenspiel-wiki.de/mediawiki/extensions/terminplanung/terminplanungapi.php'
+        try:
+            ergebnisse = requests.post(url, data=data).json()['result']
+        except Exception as e:
+            logging.error(f"Fehler bei Abfrage des Zusagestatus: {e}")
+            return {}
+        ret = {}
+        for ergebnis in ergebnisse:
+            datum = datetime.datetime.strptime(ergebnis['date'], '%d.%m.%Y').date()
+            status = {'Zusagen': [], 'Absagen': [], 'Unsicher': []}
+            if not ergebnis or not ergebnis['content']:
+                break
+            for zusage in ergebnis['content']['accept']:
+                status['Zusagen'].append(zusage['name'])
+            for absage in ergebnis['content']['decline']:
+                status['Absagen'].append(absage['name'])
+            for unsicher in ergebnis['content']['uncertain']:
+                status['Unsicher'].append(unsicher['name'])
+            ret[datum] = status
+        return ret
+
+    def terminideen(self, delta: int) -> [dict]:
+        """
+        Berechnet Terminvorschläge auf Basis des Zusagestatus.
+        :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
+        :return: Dictionary mit Kampagne, Datum und einer Liste der fehlenden Zusagen
+        """
+        heute = datetime.datetime.today().date()
+        enddatum = heute + datetime.timedelta(days=delta)
+        termine = self.zusagestatus(heute, enddatum)
+        ret = []
+
+        if self.localhost:
+            url = 'localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
+        else:
+            url = 'https://www.rollenspiel-wiki.de/mediawiki/extensions/terminplanung/terminplanungapi.php'
+
+        if not self.termine_geladen:
+            self.termine_abfragen()
+            self.termine_geladen = True
+
+        verboten = [termin.datum for termin in self.termine if termin.status in ['Angesetzt', 'Bestätigt']]
+
+        kampagnen = requests.post(url, data={'functionname': 'getCampaigns'}).json()['result']
+        for kampagne in kampagnen:
+            datum = heute
+            spieldatum = None
+            while datum <= enddatum:
+                if datum not in termine:
+                    break
+                absagen = [absage for absage in termine[datum]['Absagen'] if absage in kampagne['player']]
+                if absagen or datum in verboten:
+                    datum = datum + datetime.timedelta(days=1)
+                    continue
+                elif set(kampagne['player']).issubset(set(termine[datum]['Zusagen'])):
+                    spieldatum = datum
+                    break
+                else:
+                    if not spieldatum:
+                        spieldatum = datum
+                datum = datum + datetime.timedelta(days=1)
+
+            fehlende_zusagen = [spieler for spieler in kampagne['player']
+                                if spieler not in termine[spieldatum]['Zusagen']]
+            ret.append({'Kampagne': kampagne['name'], 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
+        return ret
+
+    def terminideen_posten(self, delta: int = 90):
+        """
+        Postet Terminideen im Tabellenformat auf der Hauptseite.
+        :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
+        """
+        ret = sorted(self.terminideen(delta), key=lambda x: x['Kampagne'])
+        for kampagne in ret:
+            if kampagne['Datum'] and not kampagne['Fehlen']:
+                kampagne['Vorschlag'] = '<span style="color:#008000">Termin möglich!</span>'
+            elif kampagne['Datum']:
+                kampagne['Vorschlag'] = '<span style="color:#808000">Termin eventuell möglich.</span>'
+            else:
+                kampagne['Vorschlag'] = '<span style="color:#800000">kein Termin möglich.</span>'
+        tabelle = [[kampagne['Kampagne'],
+                    datetime.datetime.strftime(kampagne['Datum'], '%d.%m.%Y') if kampagne['Datum'] else 'Keinen Termin '
+                                                                                                        'gefunden',
+                    ', '.join(kampagne['Fehlen']), kampagne['Vorschlag'], ''] for kampagne in ret]
+        wiki_tabelle = tabulate(tabelle,
+                                headers=["Kampagne", "Datum", "Fehlende Zusagen", 'Terminvorschlag?', 'Kommentar'],
+                                tablefmt="mediawiki")
+        seite = self.rpg_wiki.pages['Hauptseite'].text()
+        ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki_tabelle, seite, flags=re.S)
+        self.rpg_wiki.pages['Hauptseite'].edit(
+            ergebnis, f"Wartungsbot: Tabelle Terminvorschläge aktualisiert.", minor=False, bot=True)
+        logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
+
 
 def main():
     """
@@ -288,6 +397,11 @@ def main():
         wb.terminplan_mailen()
     else:
         logging.info('Versand Terminplan nicht aktiviert.')
+
+    if wb.param['TerminideenPosten'] and argument == 'terminideen':
+        wb.terminideen_posten(wb.param['TerminideenZeitfenster'])
+    else:
+        logging.info('Posten von Terminideen nicht aktiviert.')
 
 
 if __name__ == '__main__':
