@@ -339,7 +339,7 @@ Dein Wartungsbot
                 datum = datum + datetime.timedelta(days=1)
 
             fehlende_zusagen = [spieler for spieler in kampagne['player']
-                                if spieler not in termine[spieldatum]['Zusagen']]
+                                if spieler not in termine[spieldatum]['Zusagen']] if spieldatum else []
             ret.append({'Kampagne': kampagne['name'], 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
         return ret
 
@@ -349,7 +349,7 @@ Dein Wartungsbot
         :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
         """
         wochentage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
-        ret = sorted(self.terminideen(delta), key=lambda x: x['Kampagne'])
+        ret = sorted(self.terminideen(delta), key=lambda x: x['Kampagne'].upper())
         for kampagne in ret:
             if kampagne['Datum'] and not kampagne['Fehlen']:
                 kampagne['Vorschlag'] = '<span style="color:#008000">Termin möglich!</span>'
@@ -381,8 +381,7 @@ def main():
         argument = sys.argv[1]
         erlaubte_argumente = ['terminplan', 'terminideen']
         if argument not in erlaubte_argumente:
-            logging.error(f'Argument nicht erkannt: {argument}')
-            print(f'Argument unbekannt: {argument}. Erlaubt sind: {erlaubte_argumente}')
+            logging.error(f'Argument nicht erkannt: {argument}. Erlaubt sind: {erlaubte_argumente}.')
             return
     else:
         argument = None
@@ -411,3 +410,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
