@@ -367,9 +367,12 @@ Dein Wartungsbot
                         tablefmt="mediawiki")
         seite = self.rpg_wiki.pages['Hauptseite'].text()
         ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki, seite, flags=re.S)
-        self.rpg_wiki.pages['Hauptseite'].edit(
-            ergebnis, f"Wartungsbot: Tabelle Terminvorschläge aktualisiert.", minor=False, bot=True)
-        logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
+        if ergebnis == seite:
+            logging.info(f"Keine Aktualisierung der Terminvorschläge erforderlich.")
+        else:
+            self.rpg_wiki.pages['Hauptseite'].edit(
+                ergebnis, f"Wartungsbot: Tabelle Terminvorschläge aktualisiert.", minor=False, bot=True)
+            logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
 
 
 def main():
