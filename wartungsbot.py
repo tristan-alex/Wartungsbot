@@ -61,6 +61,7 @@ class Wartungsbot:
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         self.termine_geladen = False
         self.termine = None
+        self.kampagnen_links = {}
         self.param = None
         self.rpg_wiki = None
         self.protokoll = None
@@ -206,6 +207,7 @@ class Wartungsbot:
                     termin_seite = self.rpg_wiki.pages[termin.link].text()
                     termin.spieler = self.namen_auslesen(termin_seite)
                     termin.zusagen = self.namen_auslesen(termin_seite, spieler=False)
+                    self.kampagnen_links[data['TerminLinkName'][0]] = data['TerminLink'][0]
                 if termin:
                     termine.append(dataclasses.replace(termin))
         self.termine = termine
@@ -348,25 +350,32 @@ class Wartungsbot:
             ret.append({'Kampagne': kampagne['name'], 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
         return ret
 
-    @staticmethod
-    def tabelle_formatieren(tabelle: [str]) -> str:
+    def tabelle_formatieren(self, tabelle: [str]) -> str:
+        """
+        Formatiert die Tabelle für die Terminideen analog zur Terminübersicht auf der Hauptseite.
+        :param tabelle: Inhalt der Tabelle.
+        :return: Als String formatierte Tabelle im Mediawiki-Format analog zur Terminübersicht
+        """
         headers = ['Kampagne', 'Tag', 'Datum', 'Fehlende Zusagen', 'Terminvorschlag?']
-        sizes = ['12em', '8em', '10em', '30em', '20em']
+        sizes = ['12em', '8em', '10em', '25em', '12em']
         zuordnung = dict(zip(headers, sizes))
-        farbe = {'Termin möglich!': '#008000', 'Termin eventuell möglich.': '#808000',
-                'kein Termin möglich.': '#800000'}
-
+        farbe = {'Termin möglich!': '#CCFF66',
+                 'Termin eventuell möglich.': '#FFFF66',
+                 'kein Termin möglich.': '#FA5858'}
         erg = '<div style="float:left; float:left; background:none; font-size: 100%;">\n' \
               '{| cellspacing="0" cellpadding="5" style="border-collapse:collapse" class="sortable"'
         for header in headers:
-            erg = erg + '\n!align="left" style="border-bottom: 2pt darkred solid; width:' + zuordnung[
-                header] + '"|' + header
+            erg = erg + '\n!align="left" style="border-bottom: 2pt darkred solid; width:' \
+                  + zuordnung[header] + '"|' + header
         for zeile in tabelle:
             erg = erg + '\n|-'
             for i, spalte in enumerate(zeile):
                 stil = '\n|style="spacing-bottom: 0px; vertical-align: middle; border-bottom: 1pt lightgray solid;'
-                if i == 4:
-                    stil = stil + 'color: ' + farbe[zeile[i]]
+                if headers[i] == 'Terminvorschlag?':
+                    stil = stil + 'color:#000000; background-color:' + farbe[zeile[i]]
+                if headers[i] == 'Kampagne':
+                    print(spalte, self.kampagnen_links)
+                    spalte = '[[' + self.kampagnen_links[spalte] + '|' + spalte + ']]'
                 erg = erg + stil + '"|' + spalte
         erg = erg + '\n|-\n|}\n</div>'
         return erg
@@ -389,7 +398,7 @@ class Wartungsbot:
                     wochentage[kampagne['Datum'].weekday()] if kampagne['Datum'] else '',
                     dt.datetime.strftime(kampagne['Datum'], '%d.%m.%Y') if kampagne['Datum'] else 'Keinen Termin '
                                                                                                   'gefunden',
-                    ', '.join(kampagne['Fehlen']), kampagne['Vorschlag'], ''] for kampagne in ret]
+                    ', '.join(kampagne['Fehlen']), kampagne['Vorschlag']] for kampagne in ret]
         wiki = self.tabelle_formatieren(tabelle)
         seite = self.rpg_wiki.pages['Hauptseite'].text()
         ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki, seite, flags=re.S)
