@@ -348,34 +348,56 @@ class Wartungsbot:
             ret.append({'Kampagne': kampagne['name'], 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
         return ret
 
+    @staticmethod
+    def tabelle_formatieren(tabelle: [str]) -> str:
+        headers = ['Kampagne', 'Tag', 'Datum', 'Fehlende Zusagen', 'Terminvorschlag?']
+        sizes = ['12em', '8em', '10em', '30em', '20em']
+        zuordnung = dict(zip(headers, sizes))
+        farbe = {'Termin möglich!': '#008000', 'Termin eventuell möglich.': '#808000',
+                'kein Termin möglich.': '#800000'}
+
+        erg = '<div style="float:left; float:left; background:none; font-size: 100%;">\n' \
+              '{| cellspacing="0" cellpadding="5" style="border-collapse:collapse" class="sortable"'
+        for header in headers:
+            erg = erg + '\n!align="left" style="border-bottom: 2pt darkred solid; width:' + zuordnung[
+                header] + '"|' + header
+        for zeile in tabelle:
+            erg = erg + '\n|-'
+            for i, spalte in enumerate(zeile):
+                stil = '\n|style="spacing-bottom: 0px; vertical-align: middle; border-bottom: 1pt lightgray solid;'
+                if i == 4:
+                    stil = stil + 'color: ' + farbe[zeile[i]]
+                erg = erg + stil + '"|' + spalte
+        erg = erg + '\n|-\n|}\n</div>'
+        return erg
+
     def terminideen_posten(self, delta: int = 90):
         """
         Postet Terminideen im Tabellenformat auf der Hauptseite.
         :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
         """
         wochentage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
-        ret = sorted(self.terminideen(delta), key=lambda x: x['Kampagne'].upper())
+        ret = sorted(self.terminideen(delta), key=lambda x: x['Datum'])
         for kampagne in ret:
             if kampagne['Datum'] and not kampagne['Fehlen']:
-                kampagne['Vorschlag'] = '<span style="color:#008000">Termin möglich!</span>'
+                kampagne['Vorschlag'] = 'Termin möglich!'
             elif kampagne['Datum']:
-                kampagne['Vorschlag'] = '<span style="color:#808000">Termin eventuell möglich.</span>'
+                kampagne['Vorschlag'] = 'Termin eventuell möglich.'
             else:
-                kampagne['Vorschlag'] = '<span style="color:#800000">kein Termin möglich.</span>'
+                kampagne['Vorschlag'] = 'kein Termin möglich.'
         tabelle = [[kampagne['Kampagne'],
                     wochentage[kampagne['Datum'].weekday()] if kampagne['Datum'] else '',
                     dt.datetime.strftime(kampagne['Datum'], '%d.%m.%Y') if kampagne['Datum'] else 'Keinen Termin '
                                                                                                   'gefunden',
                     ', '.join(kampagne['Fehlen']), kampagne['Vorschlag'], ''] for kampagne in ret]
-        wiki = tabulate(tabelle, headers=["Kampagne", "Tag", "Datum",
-                                          "Fehlende Zusagen", 'Terminvorschlag?', 'Kommentar'], tablefmt="mediawiki")
+        wiki = self.tabelle_formatieren(tabelle)
         seite = self.rpg_wiki.pages['Hauptseite'].text()
         ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki, seite, flags=re.S)
         if ergebnis == seite:
             logging.info(f"Keine Aktualisierung der Terminvorschläge erforderlich.")
         else:
-            self.rpg_wiki.pages['Hauptseite'].edit(
-                ergebnis, f"Wartungsbot: Tabelle Terminvorschläge aktualisiert.", minor=False, bot=True)
+            msg = f"Wartungsbot: Tabelle Terminvorschläge aktualisiert."
+            self.rpg_wiki.pages['Hauptseite'].edit(ergebnis, msg, minor=False, bot=True)
             logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
 
 
