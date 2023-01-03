@@ -161,15 +161,30 @@ class Wartungsbot:
         self.termine_abfragen()
 
         heute = dt.datetime.today().date()
-        termine = [termin for termin in self.termine if (heute - termin.datum).days >= self.param['TageVergangen']]
 
-        if not termine:
-            logging.info('Keine Termine gefunden, die älter als ' + str(self.param['TageVergangen']) + ' Tage sind.')
-            return
+        for termin in self.termine:
+            seite = self.rpg_wiki.pages[termin.link].text()
 
-        for termin in termine:
-            logging.info(f"Bereinige Termin vom {termin.datum.strftime('%d.%m.%Y')} für {termin.kampagne}.")
-            self.termin_bereinigen(termin)
+            if (heute - termin.datum).days >= self.param['TageVergangen']:
+                logging.info(f"Bereinige Termin vom {termin.datum.strftime('%d.%m.%Y')} für {termin.kampagne}.")
+                with open(self.protokoll, 'a+') as f:
+                    f.write(f"\n{termin.datum.strftime('%d.%m.%y')};{termin.kampagne};{termin.status}")
+
+                ergebnis = re.sub(r'(\|Status=)(.*?)(\|)', r'\1' + r'\n\3', seite, flags=re.S)
+                ergebnis = re.sub(r'(\|Zusagen=)(.*?)(\|Status=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
+                ergebnis = re.sub(r'(\|Uhrzeit=)(.*?)(\|Spieler=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
+                ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
+                ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
+                msg = f"Wartungsbot: Vergangenen Termin vom {termin.datum.strftime('%d.%m.%y')} entfernt."
+                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
+
+            datum = dt.datetime.strftime(termin.datum, '%d.%m.%Y') if termin.datum != dt.date(9999, 12, 31) else ''
+            ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\g<1>' + datum + r'\n\g<3>', seite, flags=re.S)
+
+            if seite != ergebnis:
+                logging.info(f"Passe Datumsformat von {termin.kampagne} auf {datum} an.")
+                msg = f"Wartungsbot: Datumsformat vom {termin.kampagne}-Termin angepasst."
+                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
     def termine_abfragen(self):
         """
@@ -212,24 +227,6 @@ class Wartungsbot:
                     termine.append(dataclasses.replace(termin))
         self.termine = termine
         self.termine_geladen = True
-
-    def termin_bereinigen(self, termin: Termin):
-        """
-        Entfernte einen vergangenen Termin im Wiki.
-        :param termin: Termin, der bereinigt werden soll
-        :return:
-        """
-        with open(self.protokoll, 'a+') as f:
-            f.write(f"\n{termin.datum.strftime('%d.%m.%y')};{termin.kampagne};{termin.status}")
-
-        seite = self.rpg_wiki.pages[termin.link].text()
-        ergebnis = re.sub(r'(\|Status=)(.*?)(\|)', r'\1' + r'\n\3', seite, flags=re.S)
-        ergebnis = re.sub(r'(\|Zusagen=)(.*?)(\|Status=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
-        ergebnis = re.sub(r'(\|Uhrzeit=)(.*?)(\|Spieler=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
-        ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
-        ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
-        msg = f"Wartungsbot: Vergangenen Termin vom {termin.datum.strftime('%d.%m.%y')} entfernt."
-        self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
     def terminplan_mailen(self):
         """
