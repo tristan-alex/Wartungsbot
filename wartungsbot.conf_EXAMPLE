@@ -2,6 +2,7 @@
 # Auf true setzen, falls der Bot auf dem gleichen Server läuft, wie das Wiki
 localhost = false
 log = logging.INFO
+kampagnen_pfad = ./
 
 [ZUGANGSDATEN]
 benutzer =
