@@ -398,7 +398,7 @@ class Wartungsbot:
                     ', '.join(kampagne['Fehlen']), kampagne['Vorschlag']] for kampagne in ret]
         wiki = self.tabelle_formatieren(tabelle)
         seite = self.rpg_wiki.pages['Hauptseite'].text()
-        ergebnis = re.sub(r'(===Terminideen===)(.*?)(\|})', r'\1\n' + wiki, seite, flags=re.S)
+        ergebnis = re.sub(r'(===Terminideen===)(.*?)(</div>)', r'\1\n' + wiki, seite, flags=re.S)
         if ergebnis == seite:
             logging.info(f"Keine Aktualisierung der Terminvorschläge erforderlich.")
         else:
