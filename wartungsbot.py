@@ -75,6 +75,7 @@ class Wartungsbot:
         self.log_level = None
         self.localhost = None
         self.static_config = None
+        self.kampagnen_pfad = None
 
         self.konfig_laden(config)
         self.wiki_login()
@@ -131,6 +132,7 @@ class Wartungsbot:
         self.param_start = self.static_config['PARAMETER']['start']
         self.param_ende = self.static_config['PARAMETER']['ende']
         self.protokoll = self.static_config['PROTOKOLL']['dateiname']
+        self.kampagnen_pfad = self.static_config['TECH']['kampagnen_pfad']
         logging.basicConfig(filename='wartungsbot.log', filemode='a', format='%(asctime)s %(levelname)s: %(message)s',
                             datefmt='%d.%m.%y %H:%M:%S', level=self.log_level)
 
@@ -437,7 +439,7 @@ def main():
     """
     if len(sys.argv) > 1:
         argument = sys.argv[1]
-        erlaubte_argumente = ['terminplan', 'terminideen', 'synch']
+        erlaubte_argumente = ['terminplan']
         if argument not in erlaubte_argumente:
             logging.error(f'Argument nicht erkannt: {argument}. Erlaubt sind: {erlaubte_argumente}.')
             return
@@ -450,27 +452,27 @@ def main():
         logging.info('Bot nicht aktiv.')
         return
 
-    if wb.param['VergangeneTermineBereinigen'] and not argument:
-        wb.termine_bereinigen()
+    if not argument:
+        if wb.param['VergangeneTermineBereinigen'] :
+            wb.termine_bereinigen()
+        else:
+            logging.info('Terminbereinigung nicht aktiviert.')
+
+        if wb.param['TerminideenPosten']:
+            wb.terminideen_posten(wb.param['TerminideenZeitfenster'])
+        else:
+            logging.info('Posten von Terminideen nicht aktiviert.')
+
+        wb.kampagnen_synchronisieren(ausschluss=['Testkampagne'], pfad=wb.kampagnen_pfad+'kampagnen.txt')
     else:
-        logging.info('Terminbereinigung nicht aktiviert.')
+        logging.info("Standardfunktionen nicht aktiviert.")
 
     if wb.param['TerminplanVersenden'] and argument == 'terminplan':
         wb.terminplan_mailen()
     else:
         logging.info('Versand Terminplan nicht aktiviert.')
 
-    if wb.param['TerminideenPosten'] and argument == 'terminideen':
-        wb.terminideen_posten(wb.param['TerminideenZeitfenster'])
-    else:
-        logging.info('Posten von Terminideen nicht aktiviert.')
-
-    if argument == 'synch':
-        pfad = '/var/www/html/mediawiki/extensions/terminplanung/data/kampagnen.txt'
-        wb.kampagnen_synchronisieren(ausschluss=['Testkampagne'], pfad=pfad)
-    else:
-        logging.info('Synchronisation der Kampagnen nicht aktiviert.')
-
 
 if __name__ == '__main__':
     main()
+
