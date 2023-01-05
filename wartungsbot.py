@@ -1,6 +1,7 @@
 # -*-coding: utf-8 -*-
 import dataclasses
 import datetime as dt
+import json
 import logging
 import os
 import re
@@ -96,7 +97,15 @@ class Wartungsbot:
             if ':' in zeile:
                 ergebnis.append((zeile[zeile.find(':') + 1:zeile.rfind('|')]))
             else:
-                ergebnis.append(zeile.replace('*', '').replace(' ', ''))
+                ergebnis.append(zeile.replace('*', '').strip())
+
+        mapping = {'Tris': 'Tristan'}
+
+        for name in mapping.keys():
+            if name in ergebnis:
+                ergebnis.remove(name)
+                ergebnis.append(mapping[name])
+
         return sorted([s for s in ergebnis if s])
 
     def konfig_laden(self, config: str):
@@ -409,6 +418,17 @@ class Wartungsbot:
             self.rpg_wiki.pages['Hauptseite'].edit(ergebnis, msg, minor=False, bot=True)
             logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
 
+    def kampagnen_synchronisieren(self, ausschluss: [str], pfad: str):
+        if not self.termine_geladen:
+            self.termine_abfragen()
+
+        with open(pfad, 'w') as f:
+            kampagnen = [{'name': termin.kampagne, 'player': termin.spieler}
+                         for termin in self.termine if termin.kampagne not in ausschluss]
+            kampagnen = sorted(kampagnen, key=lambda x: x['name'])
+            logging.info(f"Synchronisiere Kampagnen mit Terminplanung.")
+            json.dump(kampagnen, f)
+
 
 def main():
     """
@@ -417,7 +437,7 @@ def main():
     """
     if len(sys.argv) > 1:
         argument = sys.argv[1]
-        erlaubte_argumente = ['terminplan', 'terminideen']
+        erlaubte_argumente = ['terminplan', 'terminideen', 'synch']
         if argument not in erlaubte_argumente:
             logging.error(f'Argument nicht erkannt: {argument}. Erlaubt sind: {erlaubte_argumente}.')
             return
@@ -444,6 +464,12 @@ def main():
         wb.terminideen_posten(wb.param['TerminideenZeitfenster'])
     else:
         logging.info('Posten von Terminideen nicht aktiviert.')
+
+    if argument == 'synch':
+        pfad = '/var/www/html/mediawiki/extensions/terminplanung/data/kampagnen.txt'
+        wb.kampagnen_synchronisieren(ausschluss=['Testkampagne'], pfad=pfad)
+    else:
+        logging.info('Synchronisation der Kampagnen nicht aktiviert.')
 
 
 if __name__ == '__main__':
