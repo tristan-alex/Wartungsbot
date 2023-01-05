@@ -38,6 +38,7 @@ class Termin:
     """
     kampagne: str = ''
     datum: dt.date = ''
+    online: str = ''
     tag: str = ''
     zeit: str = ''
     ort: str = ''
@@ -200,6 +201,7 @@ class Wartungsbot:
                     |?TerminOrt
                     |?TerminLinkName
                     |?TerminTag
+                    |?Online
                     |format=template
                     |template=TerminTabelleSMW"""
 
@@ -217,6 +219,7 @@ class Wartungsbot:
                     except ValueError:
                         pass
                 termin.tag = data['TerminTag'][0] if data['TerminTag'] else ''
+                termin.online = data['Online'][0] if data['Online'] else 'Nein'
                 if data['TerminLink']:
                     termin.link = data['TerminLink'][0]
                     termin_seite = self.rpg_wiki.pages[termin.link].text()
@@ -325,13 +328,14 @@ class Wartungsbot:
         verboten = [termin.datum for termin in self.termine if termin.status in ['Angesetzt', 'Bestätigt']]
 
         for kampagne in kampagnen:
+            online = [termin for termin in self.termine if termin.kampagne == kampagne['name']][0].online
             datum = heute
             spieldatum = None
             while datum <= enddatum:
                 if datum not in termine:
                     break
                 absagen = [absage for absage in termine[datum]['Absagen'] if absage in kampagne['player']]
-                if absagen or datum in verboten:
+                if absagen or datum in verboten or (datum.weekday() <= 3 and online == 'Nein'):
                     datum = datum + dt.timedelta(days=1)
                     continue
                 elif set(kampagne['player']).issubset(set(termine[datum]['Zusagen'])):
@@ -371,7 +375,6 @@ class Wartungsbot:
                 if headers[i] == 'Terminvorschlag?':
                     stil = stil + 'color:#000000; background-color:' + farbe[zeile[i]]
                 if headers[i] == 'Kampagne':
-                    print(spalte, self.kampagnen_links)
                     spalte = '[[' + self.kampagnen_links[spalte] + '|' + spalte + ']]'
                 erg = erg + stil + '"|' + spalte
         erg = erg + '\n|-\n|}\n</div>'
