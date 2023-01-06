@@ -311,7 +311,7 @@ class Wartungsbot:
         Jeanettes Terminplanungs-Skript.
         :param von: Startdatum
         :param bis: Enddatum
-        :return: Dictionary mit Zusagen, Absagen und 'unsicher'
+        :return: Liste der Terminstatus
         """
         von = '"from": {"dd": ' + str(von.day) + ', "mm": ' + str(von.month) + ', "yyyy": ' + str(von.year) + '}'
         bis = '"to": {"dd": ' + str(bis.day) + ', "mm": ' + str(bis.month) + ', "yyyy": ' + str(bis.year) + '}'
@@ -459,6 +459,12 @@ class Wartungsbot:
             logging.info(f"Terminvorschläge für {delta} Vorschautage gepostet.")
 
     def kampagnen_synchronisieren(self, ausschluss: [str], pfad: str):
+        """
+        Legt eine Liste der Kampagnen mit Spielern im passenden Format für Jeanettes Terminplanungs-Tool ab.
+        :param ausschluss: Liste von Kampagnennamen, die nicht mit abgelegt werden sollen (für Testzwecke)
+        :param pfad: Pfad der Zieldatei
+        :return:
+        """
         if not self.termine_geladen:
             self.termine_abfragen()
 
