@@ -512,6 +512,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    wb = Wartungsbot('wartungsbot.conf')
-    print(wb.terminideen_posten())
+    main()
