@@ -33,21 +33,39 @@ Dein Wartungsbot
 
 
 @dataclasses.dataclass
+class Kampagne:
+    """
+    Klasse für Kampagnen
+    """
+    name: str = ''
+    spieler: list = dataclasses.field(default_factory=list)
+
+
+@dataclasses.dataclass
 class Termin:
     """
     Klasse für einzelne Rollenspieltermine
     """
-    kampagne: str = ''
-    datum: dt.date = ''
+    kampagne: Kampagne = None
+    datum: dt.date = None
     online: str = ''
     tag: str = ''
     zeit: str = ''
     ort: str = ''
     status: str = ''
     link: str = ''
-    spieler: list = dataclasses.field(default_factory=list)
     zusagen: list = dataclasses.field(default_factory=list)
-    kommentare: str = ''
+
+
+@dataclasses.dataclass
+class Status:
+    """
+    Klasse für den Zusagestatus der Spieler an einzelnen Terminen
+    """
+    datum: dt.date = None
+    zusagen: list = dataclasses.field(default_factory=list)
+    absagen: list = dataclasses.field(default_factory=list)
+    unsicher: list = dataclasses.field(default_factory=list)
 
 
 class Wartungsbot:
@@ -63,7 +81,7 @@ class Wartungsbot:
         os.chdir(os.path.dirname(os.path.abspath(__file__)))
         self.termine_geladen = False
         self.termine = None
-        self.kampagnen_links = {}
+        self.kampagnen = None
         self.param = None
         self.rpg_wiki = None
         self.protokoll = None
@@ -178,9 +196,9 @@ class Wartungsbot:
             seite = self.rpg_wiki.pages[termin.link].text()
 
             if (heute - termin.datum).days >= self.param['TageVergangen']:
-                logging.info(f"Bereinige Termin vom {termin.datum.strftime('%d.%m.%Y')} für {termin.kampagne}.")
+                logging.info(f"Bereinige Termin vom {termin.datum.strftime('%d.%m.%Y')} für {termin.kampagne.name}.")
                 with open(self.protokoll, 'a+') as f:
-                    f.write(f"\n{termin.datum.strftime('%d.%m.%y')};{termin.kampagne};{termin.status}")
+                    f.write(f"\n{termin.datum.strftime('%d.%m.%y')};{termin.kampagne.name};{termin.status}")
 
                 ergebnis = re.sub(r'(\|Status=)(.*?)(\|)', r'\1' + r'\n\3', seite, flags=re.S)
                 ergebnis = re.sub(r'(\|Zusagen=)(.*?)(\|Status=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
@@ -194,8 +212,8 @@ class Wartungsbot:
             ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\g<1>' + datum + r'\n\g<3>', seite, flags=re.S)
 
             if seite != ergebnis:
-                logging.info(f"Passe Datumsformat von {termin.kampagne} auf {datum} an.")
-                msg = f"Wartungsbot: Datumsformat vom {termin.kampagne}-Termin angepasst."
+                logging.info(f"Passe Datumsformat von {termin.kampagne.name} auf {datum} an.")
+                msg = f"Wartungsbot: Datumsformat vom {termin.kampagne.name}-Termin angepasst."
                 self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
     def termine_abfragen(self):
@@ -217,29 +235,41 @@ class Wartungsbot:
                     |template=TerminTabelleSMW"""
 
         termine = []
+        kampagnen = []
 
-        termin = Termin()
         for ergebnis in self.rpg_wiki.ask(query):
             for title, data in ergebnis.items():
-                termin.kampagne = data['TerminLinkName'][0]
+
+                kampagne = Kampagne()
+                termin = Termin()
+
+                if data['TerminLink']:
+                    termin.link = data['TerminLink'][0]
+                    termin_seite = self.rpg_wiki.pages[termin.link].text()
+                    kampagne.spieler = self.namen_auslesen(termin_seite)
+                    termin.zusagen = self.namen_auslesen(termin_seite, spieler=False)
+
+                kampagne.name = data['TerminLinkName'][0]
+                termin.kampagne = kampagne
                 termin.status = data['TerminStatus'][0] if data['TerminStatus'] else ''
+
                 for fmt in ('%d.%m.%y', '%d.%m.%Y'):
                     try:
                         termin.datum = dt.datetime.strptime(data['TerminDatum'][0], fmt).date() \
                             if data['TerminDatum'] else dt.date(9999, 12, 31)
                     except ValueError:
                         pass
+
                 termin.tag = data['TerminTag'][0] if data['TerminTag'] else ''
                 termin.online = data['Online'][0] if data['Online'] else 'Nein'
-                if data['TerminLink']:
-                    termin.link = data['TerminLink'][0]
-                    termin_seite = self.rpg_wiki.pages[termin.link].text()
-                    termin.spieler = self.namen_auslesen(termin_seite)
-                    termin.zusagen = self.namen_auslesen(termin_seite, spieler=False)
-                    self.kampagnen_links[data['TerminLinkName'][0]] = data['TerminLink'][0]
+
                 if termin:
-                    termine.append(dataclasses.replace(termin))
+                    termine.append(termin)
+                if kampagne:
+                    kampagnen.append(kampagne)
+
         self.termine = termine
+        self.kampagnen = kampagnen
         self.termine_geladen = True
 
     def terminplan_mailen(self):
@@ -266,7 +296,7 @@ class Wartungsbot:
                 bei denen du mitspielen würdest.\n\nViele Grüße\nDein Wartungsbot"""
             else:
                 termine = sorted(termine, key=lambda x: str(x.datum))
-                tabelle = [[termin.tag, termin.datum.strftime('%d.%m.%y'), termin.kampagne, termin.status,
+                tabelle = [[termin.tag, termin.datum.strftime('%d.%m.%y'), termin.kampagne.name, termin.status,
                             f"zugesagt" if abonnent in termin.zusagen else f"nicht zugesagt"] for termin in termine]
                 msg = terminplan_mail(abonnent, tabelle)
             try:
@@ -275,7 +305,7 @@ class Wartungsbot:
             except Exception as e:
                 logging.error(f"Versand an {abonnent} fehlgeschlagen: {e}")
 
-    def zusagestatus(self, von: dt.date, bis: dt.date) -> dict:
+    def zusagestatus(self, von: dt.date, bis: dt.date) -> [Status]:
         """
         Ermittelt für alle Daten zwischen von und bis den Zusagestatus aller Spieler auf Basis von
         Jeanettes Terminplanungs-Skript.
@@ -298,20 +328,23 @@ class Wartungsbot:
             ergebnisse = requests.post(url, data=data, verify=verify).json()['result']
         except Exception as e:
             logging.error(f"Fehler bei Abfrage des Zusagestatus: {e}")
-            return {}
-        ret = {}
+            return []
+        ret = []
         for ergebnis in ergebnisse:
-            datum = dt.datetime.strptime(ergebnis['date'], '%d.%m.%Y').date()
-            status = {'Zusagen': [], 'Absagen': [], 'Unsicher': []}
-            if not ergebnis or not ergebnis['content']:
-                break
-            for zusage in ergebnis['content']['accept']:
-                status['Zusagen'].append(zusage['name'])
-            for absage in ergebnis['content']['decline']:
-                status['Absagen'].append(absage['name'])
-            for unsicher in ergebnis['content']['uncertain']:
-                status['Unsicher'].append(unsicher['name'])
-            ret[datum] = status
+            status = Status()
+            status.datum = dt.datetime.strptime(ergebnis['date'], '%d.%m.%Y').date()
+            if not ergebnis['content']:
+                ret.append(status)
+                continue
+
+            for typ in ergebnis['content']:
+                personen = ergebnis['content'][typ]
+                ergebnis['content'][typ] = [person['name'] for person in personen]
+
+            status.zusagen = sorted(ergebnis['content']['accept'])
+            status.absagen = sorted(ergebnis['content']['decline'])
+            status.unsicher = sorted(ergebnis['content']['uncertain'])
+            ret.append(status)
         return ret
 
     def terminideen(self, delta: int) -> [dict]:
@@ -322,44 +355,48 @@ class Wartungsbot:
         """
         heute = dt.datetime.today().date()
         enddatum = heute + dt.timedelta(days=delta)
-        termine = self.zusagestatus(heute, enddatum)
+        statusliste = self.zusagestatus(heute, enddatum)
         ret = []
-
-        if self.localhost:
-            url = 'https://localhost/mediawiki/extensions/terminplanung/terminplanungapi.php'
-            verify = False
-        else:
-            url = 'https://www.rollenspiel-wiki.de/mediawiki/extensions/terminplanung/terminplanungapi.php'
-            verify = True
-        kampagnen = requests.post(url, data={'functionname': 'getCampaigns'}, verify=verify).json()['result']
 
         if not self.termine_geladen:
             self.termine_abfragen()
             self.termine_geladen = True
         verboten = [termin.datum for termin in self.termine if termin.status in ['Angesetzt', 'Bestätigt']]
 
-        for kampagne in kampagnen:
-            online = [termin for termin in self.termine if termin.kampagne == kampagne['name']][0].online
+        for kampagne in [kampagne for kampagne in self.kampagnen if kampagne.name != 'Testkampagne']:
+            online = [termin.online for termin in self.termine if termin.kampagne == kampagne][0]
             datum = heute
             spieldatum = None
             while datum <= enddatum:
-                if datum not in termine:
+
+                if datum not in [status.datum for status in statusliste]:
                     break
-                absagen = [absage for absage in termine[datum]['Absagen'] if absage in kampagne['player']]
-                if absagen or datum in verboten or (datum.weekday() <= 3 and online == 'Nein'):
+
+                status = [status for status in statusliste if status.datum == datum][0]
+                if set(status.absagen).intersection(set(kampagne.spieler)):
                     datum = datum + dt.timedelta(days=1)
                     continue
-                elif set(kampagne['player']).issubset(set(termine[datum]['Zusagen'])):
+
+                if datum in verboten or (datum.weekday() <= 3 and online == 'Nein'):
+                    datum = datum + dt.timedelta(days=1)
+                    continue
+
+                if set(kampagne.spieler).issubset(set(status.zusagen)):
                     spieldatum = datum
                     break
-                else:
-                    if not spieldatum:
-                        spieldatum = datum
+
+                if not spieldatum:
+                    spieldatum = datum
+
                 datum = datum + dt.timedelta(days=1)
 
-            fehlende_zusagen = [spieler for spieler in kampagne['player']
-                                if spieler not in termine[spieldatum]['Zusagen']] if spieldatum else []
-            ret.append({'Kampagne': kampagne['name'], 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
+            if spieldatum:
+                status = [status for status in statusliste if status.datum == spieldatum][0]
+                fehlende_zusagen = [spieler for spieler in kampagne.spieler if spieler not in status.zusagen]
+            else:
+                fehlende_zusagen = []
+
+            ret.append({'Kampagne': kampagne.name, 'Datum': spieldatum, 'Fehlen': fehlende_zusagen})
         return ret
 
     def tabelle_formatieren(self, tabelle: [str]) -> str:
@@ -386,7 +423,8 @@ class Wartungsbot:
                 if headers[i] == 'Terminvorschlag?':
                     stil = stil + 'color:#000000; background-color:' + farbe[zeile[i]]
                 if headers[i] == 'Kampagne':
-                    spalte = '[[' + self.kampagnen_links[spalte] + '|' + spalte + ']]'
+                    link = [termin.link for termin in self.termine if termin.kampagne.name == spalte][0]
+                    spalte = '[[' + link + '|' + spalte + ']]'
                 erg = erg + stil + '"|' + spalte
         erg = erg + '\n|-\n|}\n</div>'
         return erg
@@ -425,8 +463,8 @@ class Wartungsbot:
             self.termine_abfragen()
 
         with open(pfad, 'w') as f:
-            kampagnen = [{'name': termin.kampagne, 'player': termin.spieler}
-                         for termin in self.termine if termin.kampagne not in ausschluss]
+            kampagnen = [{'name': termin.kampagne.name, 'player': termin.spieler}
+                         for termin in self.termine if termin.kampagne.name not in ausschluss]
             kampagnen = sorted(kampagnen, key=lambda x: x['name'])
             logging.info(f"Synchronisiere Kampagnen mit Terminplanung.")
             json.dump(kampagnen, f)
@@ -453,7 +491,7 @@ def main():
         return
 
     if not argument:
-        if wb.param['VergangeneTermineBereinigen'] :
+        if wb.param['VergangeneTermineBereinigen']:
             wb.termine_bereinigen()
         else:
             logging.info('Terminbereinigung nicht aktiviert.')
@@ -463,7 +501,7 @@ def main():
         else:
             logging.info('Posten von Terminideen nicht aktiviert.')
 
-        wb.kampagnen_synchronisieren(ausschluss=['Testkampagne'], pfad=wb.kampagnen_pfad+'kampagnen.txt')
+        wb.kampagnen_synchronisieren(ausschluss=['Testkampagne'], pfad=wb.kampagnen_pfad + 'kampagnen.txt')
     else:
         logging.info("Standardfunktionen nicht aktiviert.")
 
@@ -474,5 +512,6 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
-
+    # main()
+    wb = Wartungsbot('wartungsbot.conf')
+    print(wb.terminideen_posten())
