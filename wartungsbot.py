@@ -13,6 +13,8 @@ import configparser
 from mwclient import Site
 from tabulate import tabulate
 
+WOCHENTAGE = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
+
 
 def terminplan_mail(abonnent: str, tabelle: [str]) -> str:
     """
@@ -214,6 +216,14 @@ class Wartungsbot:
             if seite != ergebnis:
                 logging.info(f"Passe Datumsformat von {termin.kampagne.name} auf {datum} an.")
                 msg = f"Wartungsbot: Datumsformat vom {termin.kampagne.name}-Termin angepasst."
+                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
+
+            wochentag = WOCHENTAGE[termin.datum.weekday()]
+            ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\g<1>' + wochentag + r'\n\g<3>', seite, flags=re.S)
+
+            if seite != ergebnis:
+                logging.info(f"Passe Wochentag von {termin.kampagne.name} auf {wochentag} an.")
+                msg = f"Wartungsbot: Wochentag vom {termin.kampagne.name}-Termin angepasst."
                 self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
     def termine_abfragen(self):
@@ -434,7 +444,6 @@ class Wartungsbot:
         Postet Terminideen im Tabellenformat auf der Hauptseite.
         :param delta: Anzahl der Tage, die in die Zukunft geschaut werden soll
         """
-        wochentage = ("Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag", "Samstag", "Sonntag")
         ret = sorted(self.terminideen(delta), key=lambda x: x['Datum'])
         for kampagne in ret:
             if kampagne['Datum'] and not kampagne['Fehlen']:
@@ -444,7 +453,7 @@ class Wartungsbot:
             else:
                 kampagne['Vorschlag'] = 'kein Termin möglich.'
         tabelle = [[kampagne['Kampagne'],
-                    wochentage[kampagne['Datum'].weekday()] if kampagne['Datum'] else '',
+                    WOCHENTAGE[kampagne['Datum'].weekday()] if kampagne['Datum'] else '',
                     dt.datetime.strftime(kampagne['Datum'], '%d.%m.%Y') if kampagne['Datum'] else 'Keinen Termin '
                                                                                                   'gefunden',
                     ', '.join(kampagne['Fehlen']), kampagne['Vorschlag']] for kampagne in ret]
