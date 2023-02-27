@@ -478,7 +478,7 @@ class Wartungsbot:
             self.termine_abfragen()
 
         with open(pfad, 'w') as f:
-            kampagnen = [{'name': termin.kampagne.name, 'player': termin.spieler}
+            kampagnen = [{'name': termin.kampagne.name, 'player': termin.kampagne.spieler}
                          for termin in self.termine if termin.kampagne.name not in ausschluss]
             kampagnen = sorted(kampagnen, key=lambda x: x['name'])
             logging.info(f"Synchronisiere Kampagnen mit Terminplanung.")
