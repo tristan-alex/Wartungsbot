@@ -218,6 +218,9 @@ class Wartungsbot:
                 msg = f"Wartungsbot: Datumsformat vom {termin.kampagne.name}-Termin angepasst."
                 self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
+            if termin.datum == dt.date(9999, 12, 31):
+                return
+
             wochentag = WOCHENTAGE[termin.datum.weekday()]
             ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\g<1>' + wochentag + r'\n\g<3>', seite, flags=re.S)
 
