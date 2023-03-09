@@ -311,7 +311,7 @@ class Wartungsbot:
 
         for abonnent in abonnenten:
             termine = [termin for termin in self.termine
-                       if termin.datum <= sonntag and abonnent in termin.spieler]
+                       if termin.datum <= sonntag and abonnent in termin.kampagne.spieler]
 
             if not self.termine:
                 msg = f"""Lieber {abonnent},\n\nin der nächsten Woche habe ich keine Rollenspiel-Termine gefunden,
