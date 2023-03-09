@@ -185,7 +185,7 @@ class Wartungsbot:
             logging.exception(e)
         logging.debug(f"Konfiguration gelesen:\n{self.param}")
 
-    def termine_bereinigen(self):
+    def termine_bereinigen(self, debug=False):
         """
         Bereinigt abgelaufene Termine.
         :return:
@@ -208,7 +208,10 @@ class Wartungsbot:
                 ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
                 ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\1' + r'\n\3', ergebnis, flags=re.S)
                 msg = f"Wartungsbot: Vergangenen Termin vom {termin.datum.strftime('%d.%m.%y')} entfernt."
-                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
+                if debug:
+                    print(msg)
+                else:
+                    self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
             datum = dt.datetime.strftime(termin.datum, '%d.%m.%Y') if termin.datum != dt.date(9999, 12, 31) else ''
             ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\g<1>' + datum + r'\n\g<3>', seite, flags=re.S)
@@ -216,10 +219,13 @@ class Wartungsbot:
             if seite != ergebnis:
                 logging.info(f"Passe Datumsformat von {termin.kampagne.name} auf {datum} an.")
                 msg = f"Wartungsbot: Datumsformat vom {termin.kampagne.name}-Termin angepasst."
-                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
+                if debug:
+                    print(msg)
+                else:
+                    self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
             if termin.datum == dt.date(9999, 12, 31):
-                return
+                continue
 
             wochentag = WOCHENTAGE[termin.datum.weekday()]
             ergebnis = re.sub(r'(\|Wochentag=)(.*?)(\|Kampagne=)', r'\g<1>' + wochentag + r'\n\g<3>', seite, flags=re.S)
@@ -227,7 +233,10 @@ class Wartungsbot:
             if seite != ergebnis:
                 logging.info(f"Passe Wochentag von {termin.kampagne.name} auf {wochentag} an.")
                 msg = f"Wartungsbot: Wochentag vom {termin.kampagne.name}-Termin angepasst."
-                self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
+                if debug:
+                    print(msg)
+                else:
+                    self.rpg_wiki.pages[termin.link].edit(ergebnis, msg, minor=False, bot=True)
 
     def termine_abfragen(self):
         """
