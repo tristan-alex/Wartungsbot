@@ -216,9 +216,12 @@ class Wartungsbot:
             datum = dt.datetime.strftime(termin.datum, '%d.%m.%Y') if termin.datum != dt.date(9999, 12, 31) else ''
             ergebnis = re.sub(r'(\|Datum=)(.*?)(\|Wochentag=)', r'\g<1>' + datum + r'\n\g<3>', seite, flags=re.S)
 
+            ergebnis = re.sub(r'(\|Uhrzeit=)(\D*)(\d+)(:?)(\d*)(\D*)(\n\|)', r'\1\3\4\5\7', ergebnis, flags=re.S)
+            ergebnis = re.sub(r'(\|Uhrzeit=)(\d+)(:{0})(\n\|)', r'\g<1>\g<2>:00\g<3>\g<4>', ergebnis, flags=re.S)
+
             if seite != ergebnis:
-                logging.info(f"Passe Datumsformat von {termin.kampagne.name} auf {datum} an.")
-                msg = f"Wartungsbot: Datumsformat vom {termin.kampagne.name}-Termin angepasst."
+                logging.info(f"Passe Datums- und Zeitformat von {termin.kampagne.name} auf {datum} an.")
+                msg = f"Wartungsbot: Datums- und Zeitformat vom {termin.kampagne.name}-Termin angepasst."
                 if debug:
                     print(msg)
                 else:
@@ -540,3 +543,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
